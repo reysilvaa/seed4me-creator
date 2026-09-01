@@ -50,30 +50,41 @@ func (c *TempMailLolClient) GenerateEmail() (string, error) {
 		return "", fmt.Errorf("TEMPMAIL_LOL_KEY belum diset — isi tempmail_lol_key di config.json atau env TEMPMAIL_LOL_KEY")
 	}
 	payload, _ := json.Marshal(map[string]string{"prefix": "seed"})
-	req, err := http.NewRequest("POST", TempMailLolBaseURL+"/inboxes", bytes.NewReader(payload))
-	if err != nil {
-		return "", err
+
+	var lastErr error
+	for attempt := 1; attempt <= 5; attempt++ {
+		req, err := http.NewRequest("POST", TempMailLolBaseURL+"/inboxes", bytes.NewReader(payload))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+c.APIKey)
+		req.Header.Set("User-Agent", tempMailLolUA)
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			// DNS/net transient (mis. "no such host") — coba lagi sampai 10 detik
+			lastErr = err
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		var result TempMailLolInboxResp
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || result.Address == "" {
+			_ = resp.Body.Close()
+			lastErr = fmt.Errorf("gagal membuat inbox TempMail.lol")
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		_ = resp.Body.Close()
+
+		c.mu.Lock()
+		c.Tokens[result.Address] = result.Token
+		c.mu.Unlock()
+
+		return result.Address, nil
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	req.Header.Set("User-Agent", tempMailLolUA)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var result TempMailLolInboxResp
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || result.Address == "" {
-		return "", fmt.Errorf("gagal membuat inbox TempMail.lol")
-	}
-
-	c.mu.Lock()
-	c.Tokens[result.Address] = result.Token
-	c.mu.Unlock()
-
-	return result.Address, nil
+	return "", fmt.Errorf("gagal membuat inbox TempMail.lol: %v", lastErr)
 }
 
 func (c *TempMailLolClient) PollToken(email string, timeout time.Duration) (string, error) {

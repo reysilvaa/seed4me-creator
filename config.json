@@ -1,11 +1,11 @@
 {
   "count": 1,
-  "concurrency": 1,
+  "concurrency": 4,
   "password": "12345678",
   "promo_code": "",
   "proxy": "",
   "tor_socks": "127.0.0.1:9050",
-  "email_service": "tempmailing",
+  "email_service": "tempmaillol",
   "email_domain": "catchmail.io",
   "tempmail_lol_key": "tempmail.20260901.lk82l1fc0csxmtsdf77dq3d1tuu2moytzpeyishvwbesiay4",
   "max_retries": 3,

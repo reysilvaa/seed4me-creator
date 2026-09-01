@@ -17,7 +17,7 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 	if activeProxy == "" {
 		activeProxy = proxy.GetWorkingProxy(cfg.TorSOCKS, logFn)
 		if activeProxy == "" {
-			return nil, fmt.Errorf("tidak ada proxy berfungsi (Tor mati & daftar proxy publik kosong) — stop, jangan lanjut lewat IP asli")
+			return nil, fmt.Errorf("tidak ada proxy berfungsi — nyalakan Tor, atau set \"proxy\": \"http://ip:port\" di config.json, lalu coba lagi")
 		}
 	}
 

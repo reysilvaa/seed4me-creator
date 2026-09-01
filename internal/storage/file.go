@@ -13,8 +13,8 @@ import (
 
 var mu sync.Mutex
 
-// ponytail: JSON read-modify-write per akun, O(n²) kalau akun ribuan;
-// ganti ke append-only JSONL kalau throughput mulai penting.
+// Append-only JSONL: O(1) per akun, tidak perlu read-modify-write seluruh file.
+// File lama (format array JSON atau apa pun) tidak akan dirusak — hanya ditambahi.
 func SaveAccount(acc model.Account, jsonPath, txtPath string) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -29,37 +29,33 @@ func SaveAccount(acc model.Account, jsonPath, txtPath string) error {
 		}
 	}
 
-	// 1. Simpan ke JSON
-	var accounts []model.Account
-	if data, err := os.ReadFile(jsonPath); err == nil {
-		if err := json.Unmarshal(data, &accounts); err != nil {
-			return fmt.Errorf("%s korup — akun TIDAK ditulis agar tidak menimpa data lama: %w", jsonPath, err)
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("gagal membaca %s: %w", jsonPath, err)
-	}
-
-	accounts = append(accounts, acc)
-	jsonData, err := json.MarshalIndent(accounts, "", "  ")
+	// 1. Append ke JSON (satu objek per baris)
+	line, err := json.Marshal(acc)
 	if err != nil {
 		return fmt.Errorf("gagal encode JSON: %w", err)
 	}
-	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
-		return fmt.Errorf("gagal menulis %s: %w", jsonPath, err)
+	if err := appendFile(jsonPath, append(line, '\n')); err != nil {
+		return err
 	}
 
 	// 2. Append ke TXT
-	f, err := os.OpenFile(txtPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("gagal membuka %s: %w", txtPath, err)
-	}
-	defer f.Close()
-
-	line := fmt.Sprintf("Email: %s | Password: %s | Status: %s | Date: %s\n",
+	txt := fmt.Sprintf("Email: %s | Password: %s | Status: %s | Date: %s\n",
 		acc.Email, acc.Password, acc.Status, acc.CreatedAt)
-	if _, err := f.WriteString(line); err != nil {
-		return fmt.Errorf("gagal menulis %s: %w", txtPath, err)
+	if err := appendFile(txtPath, []byte(txt)); err != nil {
+		return err
 	}
 
 	return nil
-}
+}
+
+func appendFile(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("gagal membuka %s: %w", path, err)
+	}
+	defer f.Close()
+	if _, err := f.Write(data); err != nil {
+		return fmt.Errorf("gagal menulis %s: %w", path, err)
+	}
+	return nil
+}

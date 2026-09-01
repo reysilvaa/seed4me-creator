@@ -130,7 +130,7 @@ func (c *TempMailIngClient) PollToken(email string, timeout time.Duration) (stri
 				}
 			}
 		}
-		time.Sleep(2500 * time.Millisecond)
+		time.Sleep(2 * time.Second)
 	}
 
 	return "", fmt.Errorf("timeout menunggu email konfirmasi di TempMail.ing (%s)", email)

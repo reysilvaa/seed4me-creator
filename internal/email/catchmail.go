@@ -102,7 +102,7 @@ func (c *CatchMailClient) PollToken(address string, timeout time.Duration) (stri
 				}
 			}
 		}
-		time.Sleep(3 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 
 	return "", fmt.Errorf("timeout menunggu verifikasi email di CatchMail (%s)", address)

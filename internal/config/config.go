@@ -42,10 +42,10 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Count:              1,
-		Concurrency:        1,
+		Concurrency:        4,
 		Password:           "12345678",
 		TorSOCKS:           "127.0.0.1:9050",
-		EmailService:       EmailServiceTempMailIng,
+		EmailService:       EmailServiceTempMailLol,
 		EmailDomain:        "catchmail.io",
 		MaxRetries:         3,
 		PollTimeoutSeconds: 45,

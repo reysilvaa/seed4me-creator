@@ -35,17 +35,20 @@ func TestSaveAccount(t *testing.T) {
 	}
 }
 
-func TestSaveAccountRefusesCorruptJSON(t *testing.T) {
+func TestSaveAccountAppendsJSONL(t *testing.T) {
 	tmpDir := t.TempDir()
 	jsonPath := filepath.Join(tmpDir, "accounts.json")
-	_ = os.WriteFile(jsonPath, []byte("{corrupt"), 0644)
+	_ = os.WriteFile(jsonPath, []byte("{old data}\n"), 0644)
 
 	acc := model.Account{Email: "x@y.z", Password: "p", Status: "Active"}
-	if err := SaveAccount(acc, jsonPath, filepath.Join(tmpDir, "accounts.txt")); err == nil {
-		t.Fatal("expected error on corrupt json, got nil")
+	if err := SaveAccount(acc, jsonPath, filepath.Join(tmpDir, "accounts.txt")); err != nil {
+		t.Fatalf("save failed: %v", err)
 	}
 	data, _ := os.ReadFile(jsonPath)
-	if string(data) != "{corrupt" {
-		t.Fatalf("corrupt file must not be overwritten, got %q", string(data))
+	if !strings.HasPrefix(string(data), "{old data}\n") {
+		t.Fatalf("existing content must be preserved, got %q", string(data))
+	}
+	if !strings.Contains(string(data), `"email":"x@y.z"`) {
+		t.Fatalf("expected JSONL entry, got %q", string(data))
 	}
 }
