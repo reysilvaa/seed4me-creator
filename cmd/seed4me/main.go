@@ -3,71 +3,77 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"strings"
+	"sync"
 
-	"seed4me-creator/internal/proxy"
+	"seed4me-creator/internal/config"
 	"seed4me-creator/internal/service"
 )
 
-const (
-	colorGreen = "\033[92m"
-	colorCyan  = "\033[96m"
-	colorBold  = "\033[1m"
-	colorReset = "\033[0m"
-)
+var printMu sync.Mutex
 
-func logInfo(msg string)    { fmt.Printf("[i] %s\n", msg) }
-func logSuccess(msg string) { fmt.Printf("%s[✓] %s%s\n", colorGreen, msg, colorReset) }
-func logWarn(msg string)    { fmt.Printf("[!] %s\n", msg) }
-func logError(msg string)   { fmt.Printf("[✗] %s\n", msg) }
+func logMsg(format string, a ...any) {
+	printMu.Lock()
+	defer printMu.Unlock()
+	fmt.Printf(format+"\n", a...)
+}
 
 func main() {
-	countFlag := flag.Int("n", 1, "Jumlah akun yang ingin dibuat")
-	proxyFlag := flag.String("proxy", "", "Proxy manual (opsional, misal: http://127.0.0.1:8080)")
-	proxyFile := flag.String("proxy-file", "", "File daftar proxy custom (opsional)")
-	promoFlag := flag.String("promo", "", "Promo code (opsional)")
+	configPath := flag.String("config", "config.json", "Path file konfigurasi")
+	countFlag := flag.Int("n", 0, "Jumlah akun yang ingin dibuat")
+	concurrencyFlag := flag.Int("c", 0, "Jumlah worker paralel")
+	proxyFlag := flag.String("proxy", "", "Proxy manual (misal: http://ip:port)")
+	promoFlag := flag.String("promo", "", "Promo code")
 	flag.Parse()
 
-	var customProxies []string
-	if *proxyFile != "" {
-		if data, err := os.ReadFile(*proxyFile); err == nil {
-			for _, line := range strings.Split(string(data), "\n") {
-				line = strings.TrimSpace(line)
-				if line != "" && !strings.HasPrefix(line, "#") {
-					customProxies = append(customProxies, line)
+	cfg := config.LoadConfig(*configPath)
+	if *countFlag > 0 {
+		cfg.Count = *countFlag
+	}
+	if *concurrencyFlag > 0 {
+		cfg.Concurrency = *concurrencyFlag
+	}
+	if *proxyFlag != "" {
+		cfg.Proxy = *proxyFlag
+	}
+	if *promoFlag != "" {
+		cfg.PromoCode = *promoFlag
+	}
+	if cfg.Concurrency > cfg.Count {
+		cfg.Concurrency = cfg.Count
+	}
+
+	logMsg("[i] Menjalankan Seed4Me Creator | Target: %d akun | Concurrency: %d worker", cfg.Count, cfg.Concurrency)
+
+	jobs := make(chan int, cfg.Count)
+	for i := 1; i <= cfg.Count; i++ {
+		jobs <- i
+	}
+	close(jobs)
+
+	var wg sync.WaitGroup
+	for w := 1; w <= cfg.Concurrency; w++ {
+		wg.Add(1)
+		go func(wid int) {
+			defer wg.Done()
+			for id := range jobs {
+				logFn := func(msg string) {
+					logMsg("[Worker %d | #%d/%d] %s", wid, id, cfg.Count, msg)
 				}
+				acc, err := service.CreateAccount(cfg, logFn)
+				if err != nil {
+					logMsg("[✗] [Worker %d | #%d] Gagal: %v", wid, id, err)
+					continue
+				}
+				printMu.Lock()
+				fmt.Printf("\n\033[92m\033[1m[✓] [Worker %d | #%d] Akun Sukses:\n", wid, id)
+				fmt.Printf("Email     : %s\n", acc.Email)
+				fmt.Printf("Password  : %s\n", acc.Password)
+				fmt.Printf("Status    : ACTIVE (Free Trial 7 Hari)\033[0m\n\n")
+				printMu.Unlock()
 			}
-		}
+		}(w)
 	}
+	wg.Wait()
 
-	rotator := proxy.NewRotator(customProxies)
-	creator := service.NewAccountCreator(
-		rotator,
-		*proxyFlag,
-		*promoFlag,
-		logInfo,
-		logWarn,
-		logError,
-		logSuccess,
-	)
-
-	for i := 1; i <= *countFlag; i++ {
-		if *countFlag > 1 {
-			fmt.Printf("\n=== [%d/%d] Membuat Akun Seed4Me ===\n", i, *countFlag)
-		}
-
-		acc, err := creator.CreateOne()
-		if err != nil {
-			logError(err.Error())
-			continue
-		}
-
-		fmt.Printf("%s%s", colorGreen, colorBold)
-		fmt.Printf("Email     : %s\n", acc.Email)
-		fmt.Printf("Password  : %s\n", acc.Password)
-		fmt.Printf("IPSec PSK : %s\n", acc.PSK)
-		fmt.Printf("Status    : ACTIVE (Free Trial 7 Hari)\n")
-		fmt.Printf("%s", colorReset)
-	}
+	logMsg("[✓] Selesai! Akun tersimpan di %s & %s", cfg.JSONFile, cfg.TXTFile)
 }

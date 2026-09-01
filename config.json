@@ -1,0 +1,10 @@
+{
+  "count": 1,
+  "concurrency": 1,
+  "promo_code": "",
+  "proxy": "",
+  "tor_socks": "127.0.0.1:9050",
+  "email_domain": "catchmail.io",
+  "json_file": "accounts.json",
+  "txt_file": "accounts.txt"
+}

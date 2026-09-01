@@ -2,90 +2,79 @@ package service
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"seed4me-creator/internal/client"
+	"seed4me-creator/internal/config"
 	"seed4me-creator/internal/model"
 	"seed4me-creator/internal/proxy"
 	"seed4me-creator/internal/storage"
 )
 
-type AccountCreator struct {
-	Rotator     *proxy.Rotator
-	ManualProxy string
-	PromoCode   string
-	LogInfo     func(string)
-	LogWarn     func(string)
-	LogError    func(string)
-	LogSuccess  func(string)
-}
-
-func NewAccountCreator(rotator *proxy.Rotator, manualProxy, promoCode string, logInfo, logWarn, logError, logSuccess func(string)) *AccountCreator {
-	return &AccountCreator{
-		Rotator:     rotator,
-		ManualProxy: manualProxy,
-		PromoCode:   promoCode,
-		LogInfo:     logInfo,
-		LogWarn:     logWarn,
-		LogError:    logError,
-		LogSuccess:  logSuccess,
-	}
-}
-
-func (s *AccountCreator) CreateOne() (*model.Account, error) {
-	activeProxy := s.ManualProxy
-
-	// 1. Ambil proxy aktif jika tidak ada manual proxy
-	if activeProxy == "" && s.Rotator != nil {
-		if p, err := s.Rotator.GetWorkingProxy(s.LogInfo); err == nil {
-			activeProxy = p
+func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error) {
+	activeProxy := cfg.Proxy
+	if activeProxy == "" {
+		activeProxy = proxy.GetWorkingProxy(cfg.TorSOCKS, logFn)
+		if activeProxy == "" {
+			return nil, fmt.Errorf("tidak ada proxy berfungsi (Tor mati & daftar proxy publik kosong) — stop, jangan lanjut lewat IP asli")
 		}
 	}
 
-	// 2. Coba hingga 3 percobaan dengan rotasi otomatis jika rate limited
+	var lastErr error
 	for attempt := 1; attempt <= 3; attempt++ {
-		s4m := client.NewSeed4MeClient(activeProxy)
-		cm := client.NewCatchMailClient("")
-
-		email := client.GenerateEmail()
+		email := client.GenerateEmail(cfg.EmailDomain)
 		password := client.GeneratePassword()
 
-		if s.LogInfo != nil {
-			s.LogInfo(fmt.Sprintf("Mendaftarkan: %s", email))
+		if logFn != nil {
+			logFn(fmt.Sprintf("Mendaftarkan ke Seed4Me: %s (percobaan #%d)...", email, attempt))
 		}
 
-		err := s4m.Register(email, password, s.PromoCode)
-		if err != nil {
-			if s.LogWarn != nil {
-				s.LogWarn(fmt.Sprintf("Gagal (percobaan #%d): %v", attempt, err))
+		// 1. Registrasi ke Seed4Me (via proxy untuk rotasi IP)
+		if err := client.RegisterSeed4Me(email, password, cfg.PromoCode, activeProxy); err != nil {
+			if logFn != nil {
+				logFn(fmt.Sprintf("Gagal registrasi Seed4Me: %v", err))
 			}
-			if s.Rotator != nil && attempt < 3 {
-				if s.LogInfo != nil {
-					s.LogInfo("Rotasi proxy baru...")
-				}
-				if nextProxy, pErr := s.Rotator.GetWorkingProxy(s.LogInfo); pErr == nil {
-					activeProxy = nextProxy
-					continue
+			lastErr = err
+			if strings.Contains(err.Error(), "diblokir") {
+				if cfg.EmailDomain == "" || cfg.EmailDomain == "catchmail.io" {
+					return nil, fmt.Errorf("domain '%s' diblokir Seed4Me — gunakan custom domain di config.json (arahkan MX ke smtp.catchmail.io)", email)
 				}
 			}
-			return nil, fmt.Errorf("registrasi gagal: %w", err)
+			if attempt < 3 && cfg.Proxy == "" {
+				activeProxy = proxy.GetWorkingProxy(cfg.TorSOCKS, logFn)
+				if activeProxy == "" {
+					return nil, fmt.Errorf("proxy berhenti berfungsi: %v", lastErr)
+				}
+			}
+			continue
 		}
 
-		if s.LogInfo != nil {
-			s.LogInfo("Menunggu email verifikasi di CatchMail.io...")
+		// 2. Polling email di CatchMail (koneksi direct)
+		if logFn != nil {
+			logFn("Menunggu email verifikasi masuk di CatchMail...")
 		}
 
-		code, err := cm.PollVerificationToken(email, 35*time.Second, s.LogInfo)
+		token, err := client.PollToken(email, 45*time.Second, logFn)
 		if err != nil {
-			return nil, fmt.Errorf("verifikasi email gagal: %w", err)
+			if logFn != nil {
+				logFn(fmt.Sprintf("Verifikasi email gagal: %v", err))
+			}
+			lastErr = err
+			continue
 		}
 
-		if s.LogInfo != nil {
-			s.LogInfo(fmt.Sprintf("Aktivasi token: %s", code))
+		if logFn != nil {
+			logFn(fmt.Sprintf("Aktivasi token konfirmasi: %s", token))
 		}
 
-		if err := s4m.ConfirmEmail(code); err != nil {
-			return nil, fmt.Errorf("aktivasi token gagal: %w", err)
+		// 3. Konfirmasi email di Seed4Me (via proxy)
+		if err := client.ConfirmSeed4Me(token, activeProxy); err != nil {
+			if logFn != nil {
+				logFn(fmt.Sprintf("Aktivasi token gagal: %v", err))
+			}
+			lastErr = err
+			continue
 		}
 
 		acc := model.Account{
@@ -93,18 +82,15 @@ func (s *AccountCreator) CreateOne() (*model.Account, error) {
 			Password:  password,
 			Status:    "Active",
 			PSK:       "seed4me",
-			Notes:     "7 Days Free Trial",
 			CreatedAt: time.Now().Format("2006-01-02 15:04:05"),
 		}
 
-		_ = storage.SaveAccount(acc)
-
-		if s.LogSuccess != nil {
-			s.LogSuccess("Akun Seed4Me Berhasil Dibuat!")
+		if err := storage.SaveAccount(acc, cfg.JSONFile, cfg.TXTFile); err != nil {
+			return nil, fmt.Errorf("akun berhasil dibuat tapi GAGAL disimpan: %w", err)
 		}
 
 		return &acc, nil
 	}
 
-	return nil, fmt.Errorf("semua percobaan habis")
+	return nil, fmt.Errorf("gagal membuat akun setelah 3 percobaan: %v", lastErr)
 }
