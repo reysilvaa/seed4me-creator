@@ -55,31 +55,32 @@ func DefaultConfig() Config {
 	}
 }
 
-// Normalize memvalidasi nilai konfigurasi agar selalu dalam batas aman
+// Normalize memvalidasi nilai konfigurasi agar selalu dalam batas aman (single source of truth dari DefaultConfig)
 func (cfg *Config) Normalize() {
+	def := DefaultConfig()
 	if cfg.Count < 1 {
-		cfg.Count = 1
+		cfg.Count = def.Count
 	}
 	if cfg.Concurrency < 1 {
-		cfg.Concurrency = 1
+		cfg.Concurrency = def.Concurrency
 	}
 	if cfg.Password == "" {
-		cfg.Password = "12345678"
+		cfg.Password = def.Password
 	}
 	if cfg.MaxRetries < 1 {
-		cfg.MaxRetries = 3
+		cfg.MaxRetries = def.MaxRetries
 	}
 	if cfg.PollTimeoutSeconds < 5 {
-		cfg.PollTimeoutSeconds = 45
+		cfg.PollTimeoutSeconds = def.PollTimeoutSeconds
 	}
 	if cfg.EmailService == "" {
-		cfg.EmailService = EmailServiceTempMailIng
+		cfg.EmailService = def.EmailService
 	}
 	if cfg.JSONFile == "" {
-		cfg.JSONFile = "accounts.json"
+		cfg.JSONFile = def.JSONFile
 	}
 	if cfg.TXTFile == "" {
-		cfg.TXTFile = "accounts.txt"
+		cfg.TXTFile = def.TXTFile
 	}
 }
 
