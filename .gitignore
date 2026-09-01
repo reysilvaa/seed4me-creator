@@ -16,3 +16,4 @@ seed4me-cli
 .idea/
 __pycache__/
 seed4me
+ovpn/

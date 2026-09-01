@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"seed4me-creator/internal/config"
@@ -26,6 +30,12 @@ func main() {
 	flag.Parse()
 
 	cfg := config.LoadConfig(*configPath)
+
+	// Jika dijalankan tanpa argumen CLI, tampilkan Menu Interaktif
+	if len(os.Args) == 1 {
+		showInteractiveMenu(&cfg)
+	}
+
 	if *countFlag > 0 {
 		cfg.Count = *countFlag
 	}
@@ -38,6 +48,80 @@ func main() {
 	if *promoFlag != "" {
 		cfg.PromoCode = *promoFlag
 	}
+
+	runCreator(cfg)
+}
+
+func showInteractiveMenu(cfg *config.Config) {
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Println("\n======================================================")
+		fmt.Println("       SEED4ME AUTO CREATOR (Go Edition)")
+		fmt.Println("======================================================")
+		fmt.Println(" [1] Buat 1 Akun Cepat (Instan)")
+		fmt.Println(" [2] Buat Banyak Akun (Kustom Jumlah & Worker)")
+		fmt.Println(" [3] Lihat Daftar Akun (accounts.txt)")
+		fmt.Println(" [4] Cek File OpenVPN (folder ovpn/)")
+		fmt.Println(" [0] Keluar")
+		fmt.Println("======================================================")
+		fmt.Print("Pilih menu [0-4]: ")
+
+		input, _ := reader.ReadString('\n')
+		choice := strings.TrimSpace(input)
+
+		switch choice {
+		case "1":
+			cfg.Count = 1
+			cfg.Concurrency = 1
+			return
+		case "2":
+			fmt.Print("Masukkan jumlah akun yang ingin dibuat [default 5]: ")
+			nStr, _ := reader.ReadString('\n')
+			nStr = strings.TrimSpace(nStr)
+			if n, err := strconv.Atoi(nStr); err == nil && n > 0 {
+				cfg.Count = n
+			} else {
+				cfg.Count = 5
+			}
+
+			fmt.Print("Masukkan jumlah worker paralel [default 2]: ")
+			cStr, _ := reader.ReadString('\n')
+			cStr = strings.TrimSpace(cStr)
+			if c, err := strconv.Atoi(cStr); err == nil && c > 0 {
+				cfg.Concurrency = c
+			} else {
+				cfg.Concurrency = 2
+			}
+			return
+		case "3":
+			data, err := os.ReadFile(cfg.TXTFile)
+			if err != nil {
+				fmt.Printf("\n[!] Belum ada akun di %s\n", cfg.TXTFile)
+			} else {
+				fmt.Printf("\n--- ISI %s ---\n%s\n", cfg.TXTFile, string(data))
+			}
+		case "4":
+			files, err := os.ReadDir("ovpn")
+			if err != nil || len(files) == 0 {
+				fmt.Println("\n[!] Folder ovpn/ belum ada. Buat akun terlebih dahulu.")
+			} else {
+				fmt.Println("\n--- FILE DALAM FOLDER ovpn/ ---")
+				for _, f := range files {
+					fmt.Printf("  • %s\n", f.Name())
+				}
+				fmt.Println("\nGunakan: sudo openvpn --config ovpn/seed4me-sg.ovpn --auth-user-pass ovpn/auth.txt")
+			}
+		case "0":
+			fmt.Println("Keluar.")
+			os.Exit(0)
+		default:
+			fmt.Println("[!] Pilihan tidak valid, silakan coba lagi.")
+		}
+	}
+}
+
+func runCreator(cfg config.Config) {
 	if cfg.Concurrency > cfg.Count {
 		cfg.Concurrency = cfg.Count
 	}
