@@ -62,10 +62,9 @@ func showInteractiveMenu(cfg *config.Config) {
 		fmt.Println(" [1] Buat 1 Akun Cepat (Instan)")
 		fmt.Println(" [2] Buat Banyak Akun (Kustom Jumlah & Worker)")
 		fmt.Println(" [3] Lihat Daftar Akun (accounts.txt)")
-		fmt.Println(" [4] Cek File OpenVPN (folder ovpn/)")
 		fmt.Println(" [0] Keluar")
 		fmt.Println("======================================================")
-		fmt.Print("Pilih menu [0-4]: ")
+		fmt.Print("Pilih menu [0-3]: ")
 
 		input, _ := reader.ReadString('\n')
 		choice := strings.TrimSpace(input)
@@ -100,17 +99,6 @@ func showInteractiveMenu(cfg *config.Config) {
 				fmt.Printf("\n[!] Belum ada akun di %s\n", cfg.TXTFile)
 			} else {
 				fmt.Printf("\n--- ISI %s ---\n%s\n", cfg.TXTFile, string(data))
-			}
-		case "4":
-			files, err := os.ReadDir("ovpn")
-			if err != nil || len(files) == 0 {
-				fmt.Println("\n[!] Folder ovpn/ belum ada. Buat akun terlebih dahulu.")
-			} else {
-				fmt.Println("\n--- FILE DALAM FOLDER ovpn/ ---")
-				for _, f := range files {
-					fmt.Printf("  • %s\n", f.Name())
-				}
-				fmt.Println("\nGunakan: sudo openvpn --config ovpn/seed4me-sg.ovpn --auth-user-pass ovpn/auth.txt")
 			}
 		case "0":
 			fmt.Println("Keluar.")

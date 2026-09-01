@@ -8,11 +8,9 @@ Tool automasi pembuatan akun Seed4Me instan menggunakan **Go Standard Library** 
 
 1. **1-Click Auto Create**: Registrasi otomatis, polling email CatchMail API, dan aktivasi 7 hari free trial.
 2. **CatchMail & Custom Domain**: Mendukung `@catchmail.io` bawaan serta custom domain tanpa batas (cukup arahkan MX DNS ke `smtp.catchmail.io`).
-3. **Auto-Generate OpenVPN (`ovpn/`)**: Otomatis membuat profil `.ovpn` (SG, ID, JP, US, UK, DE, NL, HK, FR, CA) + `auth.txt` + `connect.sh` yang 100% kompatibel Linux/Debian & Windows.
-4. **Multi-Worker Concurrency**: Buat banyak akun secara paralel menggunakan opsi worker pool (`-c`).
-5. **Auto-Rotate IP & Tor Support**: Rotasi otomatis proxy publik dan deteksi otomatis Tor SOCKS5 lokal (`127.0.0.1:9050`).
-6. **Output Bersih & Thread-Safe**: Akun tersimpan rapi dan sinkron di `accounts.json` & `accounts.txt`.
-
+3. **Multi-Worker Concurrency**: Buat banyak akun secara paralel menggunakan opsi worker pool (`-c`).
+4. **Auto-Rotate IP & Tor Support**: Rotasi otomatis proxy publik dan deteksi otomatis Tor SOCKS5 lokal (`127.0.0.1:9050`).
+5. **Output Bersih & Thread-Safe**: Akun tersimpan rapi dan sinkron di `accounts.json` & `accounts.txt`.
 ## Cara Pakai
 
 ```bash

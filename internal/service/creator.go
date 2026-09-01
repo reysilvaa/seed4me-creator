@@ -89,11 +89,6 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 			return nil, fmt.Errorf("akun berhasil dibuat tapi GAGAL disimpan: %w", err)
 		}
 
-		_ = storage.SaveOVPNProfiles(acc.Email, acc.Password, "ovpn")
-		if logFn != nil {
-			logFn("[✓] Profil OpenVPN (Linux/Debian & Windows) dibuat di folder ovpn/")
-		}
-
 		return &acc, nil
 	}
 
