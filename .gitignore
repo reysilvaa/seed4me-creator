@@ -1,0 +1,17 @@
+# Credentials & Generated data
+accounts.json
+accounts.txt
+*.log
+proxies.txt
+
+# Binaries
+dist/
+seed4me-cli
+*.exe
+*.out
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
