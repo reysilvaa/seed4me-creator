@@ -56,11 +56,12 @@ func ShowInteractiveMenu(cfg *config.Config) {
 			}
 			return
 		case "3":
-			data, err := os.ReadFile(cfg.TXTFile)
-			if err != nil {
-				fmt.Printf("\n[!] Belum ada akun di %s\n", cfg.TXTFile)
-			} else {
+			if data, err := os.ReadFile(cfg.TXTFile); err == nil {
 				fmt.Printf("\n--- ISI %s ---\n%s\n", cfg.TXTFile, string(data))
+			} else if data, jErr := os.ReadFile(cfg.JSONFile); jErr == nil {
+				fmt.Printf("\n--- ISI %s (dari JSON) ---\n%s\n", cfg.JSONFile, string(data))
+			} else {
+				fmt.Printf("\n[!] Belum ada akun di %s / %s\n", cfg.TXTFile, cfg.JSONFile)
 			}
 		case "4":
 			fmt.Println("\nPilih Provider Email:")

@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 )
 
 const (
-	TempMailLolBaseURL    = "https://api.tempmail.lol/v3"
-	DefaultTempMailLolKey = "tempmail.20260901.lk82l1fc0csxmtsdf77dq3d1tuu2moytzpeyishvwbesiay4"
+	TempMailLolBaseURL = "https://api.tempmail.lol/v3"
+	tempMailLolUA      = "Mozilla/5.0"
 )
 
 type TempMailLolInboxResp struct {
@@ -32,13 +33,11 @@ type TempMailLolWaitResp struct {
 type TempMailLolClient struct {
 	APIKey     string
 	HTTPClient *http.Client
+	mu         sync.RWMutex
 	Tokens     map[string]string
 }
 
 func NewTempMailLolClient(apiKey string) *TempMailLolClient {
-	if apiKey == "" {
-		apiKey = DefaultTempMailLolKey
-	}
 	return &TempMailLolClient{
 		APIKey:     apiKey,
 		HTTPClient: &http.Client{Timeout: 45 * time.Second},
@@ -47,6 +46,9 @@ func NewTempMailLolClient(apiKey string) *TempMailLolClient {
 }
 
 func (c *TempMailLolClient) GenerateEmail() (string, error) {
+	if c.APIKey == "" {
+		return "", fmt.Errorf("TEMPMAIL_LOL_KEY belum diset — isi tempmail_lol_key di config.json atau env TEMPMAIL_LOL_KEY")
+	}
 	payload, _ := json.Marshal(map[string]string{"prefix": "seed"})
 	req, err := http.NewRequest("POST", TempMailLolBaseURL+"/inboxes", bytes.NewReader(payload))
 	if err != nil {
@@ -54,7 +56,7 @@ func (c *TempMailLolClient) GenerateEmail() (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("User-Agent", tempMailLolUA)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -67,12 +69,19 @@ func (c *TempMailLolClient) GenerateEmail() (string, error) {
 		return "", fmt.Errorf("gagal membuat inbox TempMail.lol")
 	}
 
+	c.mu.Lock()
 	c.Tokens[result.Address] = result.Token
+	c.mu.Unlock()
+
 	return result.Address, nil
 }
 
 func (c *TempMailLolClient) PollToken(email string, timeout time.Duration) (string, error) {
+	c.mu.Lock()
 	token, ok := c.Tokens[email]
+	delete(c.Tokens, email)
+	c.mu.Unlock()
+
 	if !ok {
 		return "", fmt.Errorf("token inbox tidak ditemukan untuk %s", email)
 	}
@@ -91,7 +100,7 @@ func (c *TempMailLolClient) PollToken(email string, timeout time.Duration) (stri
 		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("User-Agent", tempMailLolUA)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -111,6 +120,9 @@ func (c *TempMailLolClient) PollToken(email string, timeout time.Duration) (stri
 				return match[1], nil
 			}
 			if match := linkRegex.FindString(content); match != "" {
+				return match, nil
+			}
+			if match := trackRegex.FindString(content); match != "" {
 				return match, nil
 			}
 		}

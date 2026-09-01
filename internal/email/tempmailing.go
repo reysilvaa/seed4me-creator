@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-const TempMailIngBaseURL = "https://api.tempmail.ing/api"
+const (
+	TempMailIngBaseURL = "https://api.tempmail.ing/api"
+	tempMailIngUA      = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+)
 
 type TempMailIngGenerateResp struct {
 	Success bool   `json:"success"`
@@ -56,7 +59,7 @@ func (c *TempMailIngClient) GenerateEmail() (string, error) {
 			return "", err
 		}
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		req.Header.Set("User-Agent", tempMailIngUA)
 		req.Header.Set("Origin", "https://tempmail.ing")
 		req.Header.Set("Referer", "https://tempmail.ing/")
 
@@ -99,7 +102,7 @@ func (c *TempMailIngClient) PollToken(email string, timeout time.Duration) (stri
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		req.Header.Set("User-Agent", tempMailIngUA)
 		req.Header.Set("Origin", "https://tempmail.ing")
 		req.Header.Set("Referer", "https://tempmail.ing/")
 

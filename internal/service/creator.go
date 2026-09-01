@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"seed4me-creator/internal/config"
@@ -28,7 +27,11 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 	for attempt := 1; attempt <= cfg.MaxRetries; attempt++ {
 		emailAddr, err := provider.GenerateEmail()
 		if err != nil {
-			return nil, fmt.Errorf("gagal generate email: %w", err)
+			if logFn != nil {
+				logFn(fmt.Sprintf("Gagal generate email: %v", err))
+			}
+			lastErr = err
+			continue
 		}
 
 		password := cfg.Password
@@ -43,11 +46,6 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 				logFn(fmt.Sprintf("Gagal registrasi Seed4Me: %v", err))
 			}
 			lastErr = err
-			if strings.Contains(err.Error(), "diblokir") {
-				if cfg.EmailDomain == "" || cfg.EmailDomain == "catchmail.io" {
-					return nil, fmt.Errorf("domain '%s' diblokir Seed4Me", emailAddr)
-				}
-			}
 			if attempt < cfg.MaxRetries && cfg.Proxy == "" {
 				activeProxy = proxy.GetWorkingProxy(cfg.TorSOCKS, logFn)
 				if activeProxy == "" {
@@ -86,7 +84,9 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 			CreatedAt: time.Now().Format("2006-01-02 15:04:05"),
 		}
 
-		_ = storage.SaveAccount(*account, cfg.JSONFile, cfg.TXTFile)
+		if err := storage.SaveAccount(*account, cfg.JSONFile, cfg.TXTFile); err != nil {
+			return nil, fmt.Errorf("akun berhasil dibuat tapi GAGAL disimpan: %w", err)
+		}
 		return account, nil
 	}
 

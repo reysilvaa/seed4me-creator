@@ -1,6 +1,7 @@
 # Credentials & Generated data
 accounts.json
 accounts.txt
+config.json
 *.log
 proxies.txt
 

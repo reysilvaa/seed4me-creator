@@ -11,6 +11,7 @@ var (
 	tokenRegex = regexp.MustCompile(`(?i)confirmEmail/([a-zA-Z0-9_-]+)`)
 	linkRegex  = regexp.MustCompile(`https?://[^\s"'<>]+confirmEmail/[a-zA-Z0-9_-]+`)
 	trackRegex = regexp.MustCompile(`https?://post\.spmailtechn\.com/f/a/[^\s"'<>]+`)
+	uuidPattern = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 )
 // Provider mendefinisikan interface umum untuk seluruh layanan email sementara
 type Provider interface {

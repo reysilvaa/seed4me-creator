@@ -7,12 +7,14 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 )
 
-const CatchMailBaseURL = "https://api.catchmail.io/api/v1"
+const (
+	CatchMailBaseURL = "https://api.catchmail.io/api/v1"
+	catchMailUA      = "Mozilla/5.0"
+)
 
 type CatchMailboxItem struct {
 	ID      string `json:"id"`
@@ -64,30 +66,32 @@ func (c *CatchMailClient) PollToken(address string, timeout time.Duration) (stri
 		timeout = 45 * time.Second
 	}
 
-	uuidPattern := regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
-	confirmPattern := regexp.MustCompile(`(?i)confirmEmail/([a-zA-Z0-9_-]+)`)
-
 	deadline := time.Now().Add(timeout)
+	seen := make(map[string]bool)
 	for time.Now().Before(deadline) {
 		req, err := http.NewRequest("GET", fmt.Sprintf("%s/mailbox?address=%s", CatchMailBaseURL, url.QueryEscape(address)), nil)
 		if err == nil {
-			req.Header.Set("User-Agent", "Mozilla/5.0")
+			req.Header.Set("User-Agent", catchMailUA)
 			if resp, err := c.HTTPClient.Do(req); err == nil {
 				var mb CatchMailboxResponse
 				_ = json.NewDecoder(resp.Body).Decode(&mb)
 				_ = resp.Body.Close()
 
 				for _, m := range mb.Messages {
+					if seen[m.ID] {
+						continue
+					}
+					seen[m.ID] = true
 					msgReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/message/%s?mailbox=%s", CatchMailBaseURL, m.ID, url.QueryEscape(address)), nil)
 					if msgReq != nil {
-						msgReq.Header.Set("User-Agent", "Mozilla/5.0")
+						msgReq.Header.Set("User-Agent", catchMailUA)
 						if msgResp, err := c.HTTPClient.Do(msgReq); err == nil {
 							var detail CatchMessageDetail
 							_ = json.NewDecoder(msgResp.Body).Decode(&detail)
 							_ = msgResp.Body.Close()
 
 							content := detail.Body.Text + " " + detail.Body.HTML
-							if match := confirmPattern.FindStringSubmatch(content); len(match) > 1 {
+							if match := tokenRegex.FindStringSubmatch(content); len(match) > 1 {
 								return match[1], nil
 							}
 							if match := uuidPattern.FindString(content); match != "" && strings.Contains(strings.ToLower(content), "confirm") {

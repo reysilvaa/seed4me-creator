@@ -46,7 +46,6 @@ func DefaultConfig() Config {
 		Password:           "12345678",
 		TorSOCKS:           "127.0.0.1:9050",
 		EmailService:       EmailServiceTempMailIng,
-		TempMailLolKey:     "tempmail.20260901.lk82l1fc0csxmtsdf77dq3d1tuu2moytzpeyishvwbesiay4",
 		EmailDomain:        "catchmail.io",
 		MaxRetries:         3,
 		PollTimeoutSeconds: 45,
@@ -85,10 +84,14 @@ func (cfg *Config) Normalize() {
 }
 
 // LoadConfig membaca file konfigurasi JSON dan menerapkan fallback default
+// Key TempMail.lol diambil dari config.json, fallback ke env TEMPMAIL_LOL_KEY (jangan hardcode di source)
 func LoadConfig(path string) Config {
 	cfg := DefaultConfig()
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &cfg)
+	}
+	if cfg.TempMailLolKey == "" {
+		cfg.TempMailLolKey = os.Getenv("TEMPMAIL_LOL_KEY")
 	}
 	cfg.Normalize()
 	return cfg
