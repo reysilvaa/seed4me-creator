@@ -7,5 +7,4 @@ type Account struct {
 	Status    string `json:"status"`
 	PSK       string `json:"psk"`
 	CreatedAt string `json:"created_at"`
-	Notes     string `json:"notes,omitempty"`
 }

@@ -16,8 +16,8 @@ type Config struct {
 	TXTFile     string `json:"txt_file"`
 }
 
-func DefaultConfig() Config {
-	return Config{
+func LoadConfig(path string) Config {
+	cfg := Config{
 		Count:       1,
 		Concurrency: 1,
 		TorSOCKS:    "127.0.0.1:9050",
@@ -25,14 +25,9 @@ func DefaultConfig() Config {
 		JSONFile:    "accounts.json",
 		TXTFile:     "accounts.txt",
 	}
-}
-
-func LoadConfig(path string) Config {
-	cfg := DefaultConfig()
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &cfg)
 	}
-
 	if cfg.Count < 1 {
 		cfg.Count = 1
 	}
