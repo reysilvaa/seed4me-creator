@@ -5,37 +5,75 @@ import (
 	"os"
 )
 
+// EmailService mendefinisikan tipe layanan email sementara
+type EmailService string
+
+const (
+	EmailServiceTempMailIng EmailService = "tempmailing"
+	EmailServiceTempMailLol EmailService = "tempmaillol"
+	EmailServiceCatchMail   EmailService = "catchmail"
+)
+
+// Config menyimpan seluruh parameter pembuatan akun dan konfigurasi sistem
 type Config struct {
+	// Pengaturan Akun
 	Count       int    `json:"count"`
 	Concurrency int    `json:"concurrency"`
+	Password    string `json:"password"`
 	PromoCode   string `json:"promo_code"`
-	Proxy       string `json:"proxy"`
-	TorSOCKS    string `json:"tor_socks"`
-	EmailDomain string `json:"email_domain"`
-	JSONFile    string `json:"json_file"`
-	TXTFile     string `json:"txt_file"`
+	MaxRetries  int    `json:"max_retries"`
+
+	// Jaringan & Proxy
+	Proxy    string `json:"proxy"`
+	TorSOCKS string `json:"tor_socks"`
+
+	// Provider Email
+	EmailService       EmailService `json:"email_service"`
+	TempMailLolKey     string       `json:"tempmail_lol_key"`
+	EmailDomain        string       `json:"email_domain"`
+	PollTimeoutSeconds int          `json:"poll_timeout_seconds"`
+
+	// Penyimpanan Output
+	JSONFile string `json:"json_file"`
+	TXTFile  string `json:"txt_file"`
 }
 
-func LoadConfig(path string) Config {
-	cfg := Config{
-		Count:       1,
-		Concurrency: 1,
-		TorSOCKS:    "127.0.0.1:9050",
-		EmailDomain: "catchmail.io",
-		JSONFile:    "accounts.json",
-		TXTFile:     "accounts.txt",
+// DefaultConfig mengembalikan konfigurasi default standar
+func DefaultConfig() Config {
+	return Config{
+		Count:              1,
+		Concurrency:        1,
+		Password:           "12345678",
+		TorSOCKS:           "127.0.0.1:9050",
+		EmailService:       EmailServiceTempMailIng,
+		TempMailLolKey:     "tempmail.20260901.lk82l1fc0csxmtsdf77dq3d1tuu2moytzpeyishvwbesiay4",
+		EmailDomain:        "catchmail.io",
+		MaxRetries:         3,
+		PollTimeoutSeconds: 45,
+		JSONFile:           "accounts.json",
+		TXTFile:            "accounts.txt",
 	}
-	if data, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(data, &cfg)
-	}
+}
+
+// Normalize memvalidasi nilai konfigurasi agar selalu dalam batas aman
+func (cfg *Config) Normalize() {
 	if cfg.Count < 1 {
 		cfg.Count = 1
 	}
 	if cfg.Concurrency < 1 {
 		cfg.Concurrency = 1
 	}
-	if cfg.EmailDomain == "" {
-		cfg.EmailDomain = "catchmail.io"
+	if cfg.Password == "" {
+		cfg.Password = "12345678"
+	}
+	if cfg.MaxRetries < 1 {
+		cfg.MaxRetries = 3
+	}
+	if cfg.PollTimeoutSeconds < 5 {
+		cfg.PollTimeoutSeconds = 45
+	}
+	if cfg.EmailService == "" {
+		cfg.EmailService = EmailServiceTempMailIng
 	}
 	if cfg.JSONFile == "" {
 		cfg.JSONFile = "accounts.json"
@@ -43,5 +81,14 @@ func LoadConfig(path string) Config {
 	if cfg.TXTFile == "" {
 		cfg.TXTFile = "accounts.txt"
 	}
+}
+
+// LoadConfig membaca file konfigurasi JSON dan menerapkan fallback default
+func LoadConfig(path string) Config {
+	cfg := DefaultConfig()
+	if data, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(data, &cfg)
+	}
+	cfg.Normalize()
 	return cfg
 }

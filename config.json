@@ -1,10 +1,14 @@
 {
   "count": 1,
   "concurrency": 1,
+  "password": "12345678",
   "promo_code": "",
   "proxy": "",
   "tor_socks": "127.0.0.1:9050",
+  "email_service": "tempmailing",
   "email_domain": "catchmail.io",
+  "max_retries": 3,
+  "poll_timeout_seconds": 45,
   "json_file": "accounts.json",
   "txt_file": "accounts.txt"
 }
