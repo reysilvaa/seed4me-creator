@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"seed4me-linux/internal/proxy"
-	"seed4me-linux/internal/service"
+	"seed4me-creator/internal/proxy"
+	"seed4me-creator/internal/service"
 )
 
 const (

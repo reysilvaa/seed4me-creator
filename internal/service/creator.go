@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"seed4me-linux/internal/client"
-	"seed4me-linux/internal/model"
-	"seed4me-linux/internal/proxy"
-	"seed4me-linux/internal/storage"
+	"seed4me-creator/internal/client"
+	"seed4me-creator/internal/model"
+	"seed4me-creator/internal/proxy"
+	"seed4me-creator/internal/storage"
 )
 
 type AccountCreator struct {

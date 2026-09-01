@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"seed4me-linux/internal/model"
+	"seed4me-creator/internal/model"
 )
 
 const (

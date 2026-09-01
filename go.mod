@@ -1,3 +1,3 @@
-module seed4me-linux
+module seed4me-creator
 
 go 1.24
