@@ -84,8 +84,14 @@ func fetchCandidates() []string {
 	wg.Wait()
 
 	var merged []string
+	seen := make(map[string]bool)
 	for _, l := range lists {
-		merged = append(merged, l...)
+		for _, p := range l {
+			if !seen[p] {
+				seen[p] = true
+				merged = append(merged, p)
+			}
+		}
 	}
 	if len(merged) == 0 {
 		return merged // jangan cache hasil kosong — coba lagi di panggilan berikutnya

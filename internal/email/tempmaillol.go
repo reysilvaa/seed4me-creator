@@ -27,7 +27,6 @@ type TempMailLolWaitResp struct {
 		Body    string `json:"body"`
 		HTML    string `json:"html"`
 	} `json:"emails"`
-	TimedOut bool `json:"timed_out"`
 }
 
 type TempMailLolClient struct {

@@ -142,7 +142,7 @@ func Register(email, password, promoCode, proxyURL string) error {
 		return fmt.Errorf("domain email diblokir Seed4Me")
 	}
 	if strings.Contains(bodyStr, "already exists") {
-		return nil
+		return fmt.Errorf("email sudah terdaftar di Seed4Me")
 	}
 	if strings.Contains(bodyStr, "Please wait for some time") || strings.Contains(bodyStr, "can not register now") {
 		return fmt.Errorf("IP terkena rate limit Seed4Me")

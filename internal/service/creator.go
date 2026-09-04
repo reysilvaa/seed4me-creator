@@ -57,7 +57,7 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 						cfg.Proxy = "" // proxy manual mati — jangan ulangi di percobaan berikutnya
 						activeProxy = ""
 					}
-				} else if !strings.Contains(strings.ToLower(err.Error()), "domain email diblokir") {
+				} else if !siteLevelErr(err) {
 					activeProxy = ""
 				}
 			}
@@ -110,6 +110,12 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 		lastErr = fmt.Errorf("tidak ada percobaan berhasil")
 	}
 	return nil, fmt.Errorf("gagal membuat akun setelah %d percobaan: %v", cfg.MaxRetries, lastErr)
+}
+
+// siteLevelErr: error dari sisi situs (bukan proxy/network) — proxy layak dipakai ulang.
+func siteLevelErr(err error) bool {
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "domain email diblokir") || strings.Contains(s, "sudah terdaftar")
 }
 
 // isProxyError: error koneksi yang berarti proxy (bukan site) yang bermasalah.

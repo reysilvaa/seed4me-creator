@@ -18,7 +18,6 @@ const (
 
 type CatchMailboxItem struct {
 	ID      string `json:"id"`
-	Mailbox string `json:"mailbox"`
 	From    string `json:"from"`
 	Subject string `json:"subject"`
 }
@@ -81,23 +80,29 @@ func (c *CatchMailClient) PollToken(address string, timeout time.Duration) (stri
 					if seen[m.ID] {
 						continue
 					}
+					msgReq, err := http.NewRequest("GET", fmt.Sprintf("%s/message/%s?mailbox=%s", CatchMailBaseURL, m.ID, url.QueryEscape(address)), nil)
+					if err != nil {
+						continue
+					}
+					msgReq.Header.Set("User-Agent", catchMailUA)
+					msgResp, err := c.HTTPClient.Do(msgReq)
+					if err != nil {
+						continue // jangan tandai seen — fetch gagal transient, coba lagi di poll berikutnya
+					}
+					var detail CatchMessageDetail
+					decErr := json.NewDecoder(msgResp.Body).Decode(&detail)
+					_ = msgResp.Body.Close()
+					if decErr != nil {
+						continue
+					}
 					seen[m.ID] = true
-					msgReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/message/%s?mailbox=%s", CatchMailBaseURL, m.ID, url.QueryEscape(address)), nil)
-					if msgReq != nil {
-						msgReq.Header.Set("User-Agent", catchMailUA)
-						if msgResp, err := c.HTTPClient.Do(msgReq); err == nil {
-							var detail CatchMessageDetail
-							_ = json.NewDecoder(msgResp.Body).Decode(&detail)
-							_ = msgResp.Body.Close()
 
-							content := detail.Body.Text + " " + detail.Body.HTML
-							if match := tokenRegex.FindStringSubmatch(content); len(match) > 1 {
-								return match[1], nil
-							}
-							if match := uuidPattern.FindString(content); match != "" && strings.Contains(strings.ToLower(content), "confirm") {
-								return match, nil
-							}
-						}
+					content := detail.Body.Text + " " + detail.Body.HTML
+					if match := tokenRegex.FindStringSubmatch(content); len(match) > 1 {
+						return match[1], nil
+					}
+					if match := uuidPattern.FindString(content); match != "" && strings.Contains(strings.ToLower(content), "confirm") {
+						return match, nil
 					}
 				}
 			}
