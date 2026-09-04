@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"seed4me-creator/internal/config"
@@ -13,18 +14,22 @@ import (
 )
 
 func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error) {
-	activeProxy := cfg.Proxy
-	if activeProxy == "" {
-		activeProxy = proxy.GetWorkingProxy(cfg.TorSOCKS, logFn)
-		if activeProxy == "" {
-			return nil, fmt.Errorf("tidak ada proxy berfungsi — nyalakan Tor, atau set \"proxy\": \"http://ip:port\" di config.json, lalu coba lagi")
-		}
+	provider, err := email.GetProvider(cfg)
+	if err != nil {
+		return nil, err
 	}
 
-	provider := email.GetProvider(cfg)
+	activeProxy := cfg.Proxy
 	var lastErr error
 
 	for attempt := 1; attempt <= cfg.MaxRetries; attempt++ {
+		if activeProxy == "" {
+			activeProxy = proxy.GetWorkingProxy(cfg.TorSOCKS, logFn)
+			if activeProxy == "" {
+				return nil, fmt.Errorf("tidak ada proxy berfungsi — nyalakan Tor atau set proxy manual di config.json")
+			}
+		}
+
 		emailAddr, err := provider.GenerateEmail()
 		if err != nil {
 			if logFn != nil {
@@ -46,10 +51,14 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 				logFn(fmt.Sprintf("Gagal registrasi Seed4Me: %v", err))
 			}
 			lastErr = err
-			if attempt < cfg.MaxRetries && cfg.Proxy == "" {
-				activeProxy = proxy.GetWorkingProxy(cfg.TorSOCKS, logFn)
-				if activeProxy == "" {
-					time.Sleep(1500 * time.Millisecond)
+			if attempt < cfg.MaxRetries {
+				if cfg.Proxy != "" {
+					if isProxyError(err) {
+						cfg.Proxy = "" // proxy manual mati — jangan ulangi di percobaan berikutnya
+						activeProxy = ""
+					}
+				} else if !strings.Contains(strings.ToLower(err.Error()), "domain email diblokir") {
+					activeProxy = ""
 				}
 			}
 			continue
@@ -75,12 +84,19 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 				logFn(fmt.Sprintf("Gagal konfirmasi Seed4Me: %v", err))
 			}
 			lastErr = err
+			if attempt < cfg.MaxRetries && isProxyError(err) {
+				activeProxy = ""
+				if cfg.Proxy != "" {
+					cfg.Proxy = ""
+				}
+			}
 			continue
 		}
 
 		account := &model.Account{
 			Email:     emailAddr,
 			Password:  password,
+			Status:    "Active",
 			CreatedAt: time.Now().Format("2006-01-02 15:04:05"),
 		}
 
@@ -90,5 +106,24 @@ func CreateAccount(cfg config.Config, logFn func(string)) (*model.Account, error
 		return account, nil
 	}
 
+	if lastErr == nil {
+		lastErr = fmt.Errorf("tidak ada percobaan berhasil")
+	}
 	return nil, fmt.Errorf("gagal membuat akun setelah %d percobaan: %v", cfg.MaxRetries, lastErr)
+}
+
+// isProxyError: error koneksi yang berarti proxy (bukan site) yang bermasalah.
+func isProxyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"proxyconnect", "socks connect", "connection refused", "connection reset", "i/o timeout",
+	} {
+		if strings.Contains(s, marker) {
+			return true
+		}
+	}
+	return false
 }

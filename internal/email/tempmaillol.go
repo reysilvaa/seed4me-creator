@@ -40,7 +40,7 @@ type TempMailLolClient struct {
 func NewTempMailLolClient(apiKey string) *TempMailLolClient {
 	return &TempMailLolClient{
 		APIKey:     apiKey,
-		HTTPClient: &http.Client{Timeout: 45 * time.Second},
+		HTTPClient: &http.Client{Timeout: 61 * time.Second},
 		Tokens:     make(map[string]string),
 	}
 }
@@ -63,16 +63,22 @@ func (c *TempMailLolClient) GenerateEmail() (string, error) {
 
 		resp, err := c.HTTPClient.Do(req)
 		if err != nil {
-			// DNS/net transient (mis. "no such host") — coba lagi sampai 10 detik
+			// DNS/net transient (mis. "no such host") — coba lagi sampai ~10 detik
 			lastErr = err
 			time.Sleep(2 * time.Second)
 			continue
 		}
+		if resp.StatusCode >= 400 {
+			// 4xx/5xx bukan transient — jangan bakar 5 percobaan internal
+			lastErr = fmt.Errorf("TempMail.lol menolak (status %d)", resp.StatusCode)
+			_ = resp.Body.Close()
+			return "", lastErr
+		}
 
 		var result TempMailLolInboxResp
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || result.Address == "" {
+			lastErr = fmt.Errorf("gagal membuat inbox TempMail.lol (status %d)", resp.StatusCode)
 			_ = resp.Body.Close()
-			lastErr = fmt.Errorf("gagal membuat inbox TempMail.lol")
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -97,46 +103,54 @@ func (c *TempMailLolClient) PollToken(email string, timeout time.Duration) (stri
 		return "", fmt.Errorf("token inbox tidak ditemukan untuk %s", email)
 	}
 
-	timeoutSec := int(timeout.Seconds())
-	if timeoutSec > 60 {
-		timeoutSec = 60
-	}
-	if timeoutSec < 10 {
-		timeoutSec = 30
-	}
+	deadline := time.Now().Add(timeout)
+	seen := make(map[string]bool) // welcome/notification email tanpa token → jangan bikin "timeout" palsu
 
-	waitURL := fmt.Sprintf("%s/inboxes/%s/wait?timeout=%d", TempMailLolBaseURL, url.PathEscape(token), timeoutSec)
-	req, err := http.NewRequest("GET", waitURL, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	req.Header.Set("User-Agent", tempMailLolUA)
+	for time.Now().Before(deadline) {
+		waitSec := int(time.Until(deadline).Seconds())
+		if waitSec > 60 {
+			waitSec = 60
+		}
+		if waitSec < 1 {
+			waitSec = 1
+		}
 
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
+		waitURL := fmt.Sprintf("%s/inboxes/%s/wait?timeout=%d", TempMailLolBaseURL, url.PathEscape(token), waitSec)
+		req, err := http.NewRequest("GET", waitURL, nil)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Authorization", "Bearer "+c.APIKey)
+		req.Header.Set("User-Agent", tempMailLolUA)
 
-	var wResp TempMailLolWaitResp
-	if err := json.NewDecoder(resp.Body).Decode(&wResp); err != nil {
-		return "", fmt.Errorf("gagal parsing respon wait TempMail.lol: %w", err)
-	}
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			// network error di tengah long-poll — retry 1x singkat sebelum lanjut loop
+			if time.Now().After(deadline) {
+				return "", fmt.Errorf("gagal poll TempMail.lol: %w", err)
+			}
+			time.Sleep(1 * time.Second)
+			continue
+		}
 
-	if len(wResp.Emails) > 0 {
+		var wResp TempMailLolWaitResp
+		decodeErr := json.NewDecoder(resp.Body).Decode(&wResp)
+		_ = resp.Body.Close()
+		if decodeErr != nil {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
 		for _, item := range wResp.Emails {
-			content := fmt.Sprintf("%s\n%s\n%s", item.Subject, item.Body, item.HTML)
-			if match := tokenRegex.FindStringSubmatch(content); len(match) > 1 {
-				return match[1], nil
+			if seen[item.ID] {
+				continue
 			}
-			if match := linkRegex.FindString(content); match != "" {
-				return match, nil
-			}
-			if match := trackRegex.FindString(content); match != "" {
+			seen[item.ID] = true
+			if match, ok := extractToken(fmt.Sprintf("%s\n%s\n%s", item.Subject, item.Body, item.HTML)); ok {
 				return match, nil
 			}
 		}
+		// timed_out / emails tanpa token → loop lagi sampai deadline
 	}
 
 	return "", fmt.Errorf("timeout menunggu email di TempMail.lol (%s)", email)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"seed4me-creator/internal/cli"
@@ -18,13 +19,17 @@ func main() {
 	serviceFlag := flag.String("service", "", "Provider email: tempmailing, tempmaillol, atau catchmail")
 	flag.Parse()
 
-	cfg := config.LoadConfig(*configPath)
+	cfg, err := config.LoadConfig(*configPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	cfg.Normalize()
 
 	if *serviceFlag != "" {
 		cfg.EmailService = config.EmailService(*serviceFlag)
 	}
 
-	// Jika dijalankan tanpa argumen CLI, tampilkan Menu Interaktif
 	if len(os.Args) == 1 {
 		cli.ShowInteractiveMenu(&cfg)
 	}
@@ -41,6 +46,14 @@ func main() {
 	if *promoFlag != "" {
 		cfg.PromoCode = *promoFlag
 	}
+	cfg.Normalize()
 
-	service.RunBatch(cfg)
+	if err := cfg.Validate(); err != nil {
+		fmt.Fprintln(os.Stderr, "Konfigurasi tidak valid:", err)
+		os.Exit(2)
+	}
+	if err := service.RunBatch(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

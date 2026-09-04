@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,19 @@ func TestSaveAccount(t *testing.T) {
 		t.Fatalf("save failed: %v", err)
 	}
 
+	// JSON must stay a valid array.
+	jsonData, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("failed to read json: %v", err)
+	}
+	var parsed []model.Account
+	if err := json.Unmarshal(jsonData, &parsed); err != nil {
+		t.Fatalf("accounts.json bukan array JSON valid: %v\nisi: %s", err, string(jsonData))
+	}
+	if len(parsed) != 1 || parsed[0].Email != acc.Email {
+		t.Fatalf("unexpected accounts content: %+v", parsed)
+	}
+
 	txtData, err := os.ReadFile(txtPath)
 	if err != nil {
 		t.Fatalf("failed to read txt: %v", err)
@@ -35,20 +49,38 @@ func TestSaveAccount(t *testing.T) {
 	}
 }
 
-func TestSaveAccountAppendsJSONL(t *testing.T) {
+func TestSaveAccountMigratesLegacyJSONL(t *testing.T) {
 	tmpDir := t.TempDir()
 	jsonPath := filepath.Join(tmpDir, "accounts.json")
-	_ = os.WriteFile(jsonPath, []byte("{old data}\n"), 0644)
 
-	acc := model.Account{Email: "x@y.z", Password: "p", Status: "Active"}
+	legacy := "{\"email\":\"old@x.io\",\"password\":\"oldpass1\",\"status\":\"Active\",\"created_at\":\"2026-01-01 00:00:00\"}\n"
+	if err := os.WriteFile(jsonPath, []byte(legacy), 0600); err != nil {
+		t.Fatalf("write legacy: %v", err)
+	}
+
+	acc := model.Account{Email: "new@x.io", Password: "newpass1", Status: "Active"}
 	if err := SaveAccount(acc, jsonPath, filepath.Join(tmpDir, "accounts.txt")); err != nil {
 		t.Fatalf("save failed: %v", err)
 	}
 	data, _ := os.ReadFile(jsonPath)
-	if !strings.HasPrefix(string(data), "{old data}\n") {
-		t.Fatalf("existing content must be preserved, got %q", string(data))
+	var parsed []model.Account
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("expected valid JSON array after migration, got %q: %v", string(data), err)
 	}
-	if !strings.Contains(string(data), `"email":"x@y.z"`) {
-		t.Fatalf("expected JSONL entry, got %q", string(data))
+	if len(parsed) != 2 || parsed[0].Email != "old@x.io" || parsed[1].Email != "new@x.io" {
+		t.Fatalf("unexpected migrated accounts: %+v", parsed)
+	}
+}
+
+func TestSaveAccountRefusesCorruptFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	jsonPath := filepath.Join(tmpDir, "accounts.json")
+	if err := os.WriteFile(jsonPath, []byte("{bukan json\n"), 0600); err != nil {
+		t.Fatalf("write corrupt: %v", err)
+	}
+
+	acc := model.Account{Email: "x@y.z", Password: "password1", Status: "Active"}
+	if err := SaveAccount(acc, jsonPath, filepath.Join(tmpDir, "accounts.txt")); err == nil {
+		t.Fatal("expected error on corrupt file, got nil")
 	}
 }
